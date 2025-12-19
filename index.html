@@ -53,14 +53,39 @@ let players=[],enemies=[],bullets=[];
 class Tank{
  constructor(type,x,y,side){
   this.type=type;
-  this.level=type.level;
+  this.level=type.level||1;
   this.x=x;this.y=y;this.side=side;
-  const lvlMul=1+this.level*0.05;
-  const stageMul=side==='e'?1+(stage-1)*0.05:1;
-  this.maxHp=type.baseHp*lvlMul*stageMul;
+  this.maxHp=type.baseHp*(1+this.level*0.05)*(side==='e'?(1+stage*0.1):1);
   this.hp=this.maxHp;
-  this.dmg=type.baseDmg*lvlMul;
+  this.dmg=type.baseDmg*(1+this.level*0.05);
  }
+ takeDamage(d){this.hp=Math.max(0,this.hp-d)}
+ draw(){
+  // ==== BODY ====
+  ctx.fillStyle=this.side==='p'?'#2ec4b6':'#ef233c';
+  ctx.fillRect(this.x,this.y,60,28);
+
+  // ==== TURRET ====
+  ctx.fillStyle=this.side==='p'?'#118ab2':'#9d0208';
+  ctx.fillRect(this.x+18,this.y-10,24,14);
+
+  // ==== BARREL ====
+  ctx.fillStyle='#adb5bd';
+  ctx.fillRect(this.side==='p'?this.x+60:this.x-22,this.y+10,22,4);
+
+  // ==== WHEELS ====
+  for(let i=0;i<3;i++){
+   ctx.fillStyle='#333';
+   ctx.beginPath();
+   ctx.arc(this.x+10+i*20,this.y+28,5,0,Math.PI*2);
+   ctx.fill();
+  }
+
+  // ==== HP BAR ====
+  ctx.fillStyle='#222';ctx.fillRect(this.x,this.y-8,60,5);
+  ctx.fillStyle='#06d6a0';ctx.fillRect(this.x,this.y-8,60*(this.hp/this.maxHp),5);
+ }
+}
  takeDamage(d){this.hp=Math.max(0,this.hp-d)}
  draw(){
   // thân xe
@@ -190,9 +215,11 @@ function renderQuest(){document.getElementById('quest').innerHTML=
 
 function selectStage(v){stage=parseInt(v);spawn()}
 
-function loop(){update();draw();renderQuest();requestAnimationFrame(loop)
+function loop(){update();draw();renderQuest();requestAnimationFrame(loop)}
 
 renderShop();renderTeam();spawn();setInterval(shoot,900);loop();
 </script>
+</body>
+</html>
 </body>
 </html>
