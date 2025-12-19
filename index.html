@@ -2,224 +2,123 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Idle Tanks 3v3 – Fixed & Balanced</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Idle Tanks 3v3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 body{margin:0;background:#0b132b;color:#fff;font-family:Arial}
-#wrap{display:flex;flex-wrap:wrap}
-#left,#right{width:300px;padding:8px}
-canvas{flex:1;background:#000}
-button{width:100%;margin:4px 0;padding:8px;border:none;border-radius:10px;background:#3a86ff;color:#fff;font-weight:bold}
-.panel{background:#1c2541;border-radius:12px;padding:8px;margin-bottom:8px;font-size:14px}
-.tankCard{border:2px solid #3a86ff;border-radius:10px;padding:6px;margin-bottom:6px}
-.tankCard.locked{opacity:.4}
-.progress{height:6px;background:#333;border-radius:6px;overflow:hidden}
-.progress>div{height:100%;background:#06d6a0}
-@media(max-width:768px){#left,#right{width:100%}canvas{width:100%;height:320px}}
+#ui{display:flex}
+#left{width:260px;padding:10px;background:#1c2541}
+canvas{background:#87ceeb;flex:1}
+button{width:100%;margin:4px 0;padding:8px;border-radius:8px;border:none;background:#3a86ff;color:#fff}
 </style>
 </head>
+
 <body>
-<div id="wrap">
-<div id="left">
-<div class="panel"><b>🚜 Đội hình (tối đa 3)</b><div id="team"></div></div>
-<div class="panel"><b>🛒 Shop xe tăng</b><div id="shop"></div></div>
+<div id="ui">
+  <div id="left">
+    <h3>🚜 Idle Tanks</h3>
+    <p>Coin: <span id="coin">0</span></p>
+    <button onclick="spawn()">▶️ Chơi lại màn</button>
+  </div>
+
+  <canvas id="game" width="900" height="420"></canvas>
 </div>
-<canvas id="game" width="900" height="420"></canvas>
-<div id="right">
-<div class="panel"><b>📜 Nhiệm vụ</b><div id="quest"></div></div>
-<div class="panel"><b>🎯 Chọn màn</b>
-<input type="range" id="stageSel" min="1" max="1" value="1" oninput="selectStage(this.value)">
-<p>Màn: <span id="stage">1</span></p></div>
-<div class="panel"><b>📊 Thông tin</b>
-<p>Coin: <span id="coin">0</span></p></div>
-</div>
-</div>
+
 <script>
-const c=document.getElementById('game'),ctx=c.getContext('2d');
-let stage=1,maxStage=1,coin=0;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-// ===== TANK DATA =====
-const tankTypes=[
- {id:0,name:'Scout',cost:0,baseDmg:8,baseHp:80,owned:true,level:1},
- {id:1,name:'Fighter',cost:150,baseDmg:16,baseHp:150,owned:false,level:1},
- {id:2,name:'Heavy',cost:500,baseDmg:30,baseHp:300,owned:false,level:1},
- {id:3,name:'Sniper',cost:1200,baseDmg:70,baseHp:120,owned:false,level:1},
- {id:4,name:'Titan',cost:3000,baseDmg:150,baseHp:800,owned:false,level:1}
-];
+let coin = 0;
+let player, enemy;
+let bullets = [];
 
-let team=[0];
-let players=[],enemies=[],bullets=[];
-
+// ===== TANK =====
 class Tank{
- constructor(type,x,y,side){
-  this.type=type;
-  this.level=type.level||1;
-  this.x=x;this.y=y;this.side=side;
-  this.maxHp=type.baseHp*(1+this.level*0.05)*(side==='e'?(1+stage*0.1):1);
-  this.hp=this.maxHp;
-  this.dmg=type.baseDmg*(1+this.level*0.05);
- }
- takeDamage(d){this.hp=Math.max(0,this.hp-d)}
- draw(){
-  // ==== BODY ====
-  ctx.fillStyle=this.side==='p'?'#2ec4b6':'#ef233c';
-  ctx.fillRect(this.x,this.y,60,28);
-
-  // ==== TURRET ====
-  ctx.fillStyle=this.side==='p'?'#118ab2':'#9d0208';
-  ctx.fillRect(this.x+18,this.y-10,24,14);
-
-  // ==== BARREL ====
-  ctx.fillStyle='#adb5bd';
-  ctx.fillRect(this.side==='p'?this.x+60:this.x-22,this.y+10,22,4);
-
-  // ==== WHEELS ====
-  for(let i=0;i<3;i++){
-   ctx.fillStyle='#333';
-   ctx.beginPath();
-   ctx.arc(this.x+10+i*20,this.y+28,5,0,Math.PI*2);
-   ctx.fill();
+  constructor(x,y,color){
+    this.x=x;this.y=y;
+    this.hp=100;
+    this.color=color;
   }
-
-  // ==== HP BAR ====
-  ctx.fillStyle='#222';ctx.fillRect(this.x,this.y-8,60,5);
-  ctx.fillStyle='#06d6a0';ctx.fillRect(this.x,this.y-8,60*(this.hp/this.maxHp),5);
- }
-}
- takeDamage(d){this.hp=Math.max(0,this.hp-d)}
- draw(){
-  // thân xe
-  ctx.save();
-  ctx.translate(this.x,this.y);
-  const bodyColor=this.side==='p'?'#2ec4b6':'#ef476f';
-  const darkColor=this.side==='p'?'#118ab2':'#b5179e';
-  // thân chính
-  ctx.fillStyle=bodyColor;
-  ctx.fillRect(0,8,56,18);
-  // giáp trên
-  ctx.fillStyle=darkColor;
-  ctx.fillRect(8,0,40,12);
-  // tháp pháo
-  ctx.beginPath();
-  ctx.arc(28,10,8,0,Math.PI*2);
-  ctx.fill();
-  // nòng pháo
-  ctx.fillStyle='#333';
-  if(this.side==='p') ctx.fillRect(28,8,22,4);
-  else ctx.fillRect(-22,8,22,4);
-  // bánh xích
-  ctx.fillStyle='#444';
-  for(let i=0;i<5;i++){
-    ctx.beginPath();
-    ctx.arc(8+i*10,30,4,0,Math.PI*2);
-    ctx.fill();
+  draw(){
+    // thân
+    ctx.fillStyle=this.color;
+    ctx.fillRect(this.x,this.y,70,30);
+    // tháp
+    ctx.fillStyle="#444";
+    ctx.fillRect(this.x+20,this.y-12,30,12);
+    // nòng
+    ctx.fillRect(this.x+50,this.y-8,28,6);
+    // máu
+    ctx.fillStyle="#0f0";
+    ctx.fillRect(this.x,this.y-6,70*(this.hp/100),4);
   }
-  // thanh máu
-  ctx.fillStyle='#222';ctx.fillRect(0,-8,56,5);
-  ctx.fillStyle='#0f0';ctx.fillRect(0,-8,56*(this.hp/this.maxHp),5);
-  ctx.restore();
- }
 }
+
+// ===== BULLET =====
 class Bullet{
- constructor(x,y,v,dmg,owner){this.x=x;this.y=y;this.v=v;this.dmg=dmg;this.owner=owner}
- update(){this.x+=this.v}
- draw(){ctx.fillStyle='#ffd166';ctx.fillRect(this.x,this.y,6,3)}
-}
-
-function spawn(){
- players=[];enemies=[];bullets=[];
- team.forEach((id,i)=>players.push(new Tank(tankTypes[id],120,200+i*40,'p')));
- const enemyCount=Math.min(3,1+Math.floor(stage/5));
- for(let i=0;i<enemyCount;i++){
-  enemies.push(new Tank({baseHp:60,baseDmg:6,level:1},700,200+i*40,'e'));
- }
- maxStage=Math.max(maxStage,stage);
- document.getElementById('stageSel').max=maxStage;
-}
-
-function shoot(){
- players.forEach(p=>bullets.push(new Bullet(p.x+56,p.y+15,6,p.dmg,'p')));
- enemies.forEach(e=>bullets.push(new Bullet(e.x,e.y+15,-5,e.dmg,'e')));
-}
-
-function update(){
- for(let i=bullets.length-1;i>=0;i--){
-  const b=bullets[i];b.update();
-  if(b.owner==='p'){
-   enemies.forEach(en=>{
-    if(en.hp>0 && b.x>en.x){
-     en.takeDamage(b.dmg);
-     bullets.splice(i,1);
-     if(en.hp<=0){coin+=stage*15;updateQuest();}
-    }
-   });
-  }else{
-   players.forEach(pl=>{
-    if(pl.hp>0 && b.x<pl.x+56){
-     pl.takeDamage(b.dmg);
-     bullets.splice(i,1);
-    }
-   });
+  constructor(x,y,v){
+    this.x=x;this.y=y;this.v=v;
   }
- }
- if(enemies.every(e=>e.hp<=0)){
-  stage++;spawn();
- }
+  update(){this.x+=this.v}
+  draw(){
+    ctx.fillStyle="#ffd166";
+    ctx.fillRect(this.x,this.y,6,3);
+  }
 }
 
-function draw(){
- ctx.clearRect(0,0,c.width,c.height);
- const sky=ctx.createLinearGradient(0,0,0,300);
- sky.addColorStop(0,'#87ceeb');sky.addColorStop(1,'#cceeff');
- ctx.fillStyle=sky;ctx.fillRect(0,0,900,300);
- ctx.fillStyle='#3b7a57';ctx.fillRect(0,300,900,120);
- players.forEach(p=>p.draw());enemies.forEach(e=>e.draw());bullets.forEach(b=>b.draw());
- document.getElementById('coin').textContent=coin;
- document.getElementById('stage').textContent=stage;
+// ===== SPAWN =====
+function spawn(){
+  player=new Tank(120,300,"#06d6a0");
+  enemy=new Tank(700,300,"#ef476f");
+  bullets=[];
 }
 
-// ===== SHOP & TEAM =====
-function buyTank(id){const t=tankTypes[id];if(coin<t.cost)return;coin-=t.cost;t.owned=true;renderShop()}
-function toggleTank(id){if(!tankTypes[id].owned)return;
- if(team.includes(id))team=team.filter(x=>x!==id);else if(team.length<3)team.push(id);
- renderTeam();spawn();}
-function upgradeTank(id){const t=tankTypes[id];const cost=50*t.level;
- if(coin<cost||t.level>=100)return;coin-=cost;t.level++;spawn();}
+// ===== SHOOT =====
+setInterval(()=>{
+  if(player && enemy){
+    bullets.push(new Bullet(player.x+70,player.y+15,6));
+    bullets.push(new Bullet(enemy.x,enemy.y+15,-5));
+  }
+},800);
 
-function renderShop(){
- const s=document.getElementById('shop');s.innerHTML='';
- tankTypes.forEach(t=>{
-  const d=document.createElement('div');d.className='tankCard'+(t.owned?'':' locked');
-  d.innerHTML=`<b>${t.name}</b> (Lv ${t.level}/100)<br>💰 ${t.cost}<br>⚔ ${t.baseDmg} ❤️ ${t.baseHp}<br>`+
-   (t.owned?
-   `<button onclick="toggleTank(${t.id})">Trang bị / Tháo</button>
-    <button onclick="upgradeTank(${t.id})">Nâng cấp (50×Lv)</button>`:
-   `<button onclick="buyTank(${t.id})">Mua</button>`);
-  s.appendChild(d);
- });
+// ===== LOOP =====
+function loop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // đất
+  ctx.fillStyle="#3b7a57";
+  ctx.fillRect(0,330,900,90);
+
+  if(player && enemy){
+    player.draw();
+    enemy.draw();
+  }
+
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
+    b.update();
+    b.draw();
+
+    // đạn trúng enemy
+    if(enemy && b.v>0 && b.x>enemy.x){
+      enemy.hp-=10;
+      bullets.splice(i,1);
+      if(enemy.hp<=0){coin+=50;spawn()}
+    }
+    // đạn trúng player
+    if(player && b.v<0 && b.x<player.x+70){
+      player.hp-=10;
+      bullets.splice(i,1);
+      if(player.hp<=0){spawn()}
+    }
+  }
+
+  document.getElementById("coin").textContent=coin;
+  requestAnimationFrame(loop);
 }
-function renderTeam(){
- const t=document.getElementById('team');t.innerHTML='';
- team.forEach(id=>{const x=tankTypes[id];
-  const d=document.createElement('div');d.className='tankCard';
-  d.innerHTML=`<b>${x.name}</b> Lv ${x.level}`;
-  t.appendChild(d);
- });
-}
 
-// ===== QUEST =====
-let quest={text:'Tiêu diệt 5 tank địch',progress:0,goal:5};
-function updateQuest(){quest.progress++;if(quest.progress>=quest.goal){coin+=200;quest.progress=0}}
-function renderQuest(){document.getElementById('quest').innerHTML=
- quest.text+`<div class="progress"><div style="width:${quest.progress/quest.goal*100}%"></div></div>`}
-
-function selectStage(v){stage=parseInt(v);spawn()}
-
-function loop(){update();draw();renderQuest();requestAnimationFrame(loop)}
-
-renderShop();renderTeam();spawn();setInterval(shoot,900);loop();
+spawn();
+loop();
 </script>
-</body>
-</html>
 </body>
 </html>
